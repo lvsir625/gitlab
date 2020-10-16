@@ -1,0 +1,77 @@
+before_script:
+  - echo "before_script!!"
+variables:
+  DOMAIN: example.com
+workflow:
+  rules:
+    - if: '$DOMAIN == "example.com"'
+      when: always
+    - when: never
+stages:
+  - build
+  - test
+  - codescan
+  - deploy
+
+build:
+  before_script:
+    - echo "before_script in job"
+  stage: build
+  tags:
+    - build
+  #only:
+  #  - master
+  script:
+    - echo "mvn clean"
+    - echo "mvn install"
+  rules:
+    - exists:
+      - Dockerfile
+      when: delayed
+      start_in: "5"
+    - when: on_success
+  cache:
+    key: build
+    paths:
+      - .gitlab-ci.yml
+  after_script:
+    - echo "after_script in job"
+unittest:
+  stage: test
+  script: 
+    - echo "run test.."
+  rules:
+    - changes:
+      - Dockerfile
+      when: manual
+    - when: on_failure
+  cache:
+    key: unittest
+    paths:
+      - .gitlab-ci.yml
+deploy:
+  stage: deploy
+  tags:
+    - deploy
+  only:
+    - master
+  script:
+    - echo "hello deploy"
+  except: 
+    - test
+codescan:
+  stage: codescan
+  script:
+    - echo "codescan"
+    - sleep 3
+  parallel: 2
+  rules:
+    - if: '$DOMAIN == "example.com"'
+      when: manual
+    - if: '$DOMAIN == "example.cn"'
+      when: delayed
+      start_in: '5'
+    - when: on_success
+after_script:
+  - echo "after_script"
+  - echo
