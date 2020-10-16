@@ -1,0 +1,120 @@
+gitlab  pipline语法
+job：每个名为.gitlab-ci.yml的文件中都可以顶一个一个或多个job，每个job必须具有唯一的名称，每个作业是独立执行，并且至少包含一个script
+	列子： 
+	       variables:
+		     DOMAIN: example.com
+		   cache:
+		     paths:
+			   - my/files
+		   workflow:
+		     rules:
+			   - if: '$DOMAIN == "example.com"'    #判断是否真，真就创建管道
+				 when: always
+			   - when: never	     #上面判断为假时，执行这个规则，never标识不会创建管道，整个作业将不会执行
+	       stages:
+		     - build
+			 - test
+			 - test1
+			 - deploy
+	       build:
+	         stage: build
+	         script：
+			   - echo "asdasd"
+			 tags:
+			   - test
+			 allow_failure: true
+			 when: delayed
+			 retry: 3
+			 except:
+			   - test
+			 cache:
+			   key: build
+			   paths:
+			     - target/
+			 
+		   job2:
+		     stage: deploy
+			 when: manual
+             script:
+               - echo "asdasd"	
+             retry:
+               max: 2
+               when:
+                 - script_failure
+             parallel: 5 
+             only: 
+               - master		
+             rules:
+               - if: '$DOMAIN == "example.com"'	
+                 when: manual
+			   - if: '$DOMAIN == "example.cn"'
+                 when: delayed
+                 start_in: '5'				 
+               - when: on_success		
+           job3:
+             stage: test
+             script：
+			   - echo "test"	
+             rules:
+               - changes:
+                 - Dockerfile
+                 when: manual
+               - when: on_failure
+			   - allow_failure: true
+           job4:
+             stage: test1
+             script：
+			   - echo "test1"	
+             rules:
+               - exists:
+                 - Dockerfile
+                 when: manual
+               - when: on_failure 		  	   
+			
+script：由上面例子可见，这个部分就是一些要执行的shell命令
+stages: 指定pipline包含哪些stage，并且这些stage是按照stages里的顺序一次执行的
+stage: stage是在job中定义这个job属于stages中的哪个步骤
+before_script: 可以在全局，也可以在单个job中指定，如果单个job中没有指定，就使用全局默认的。表示在job执行之前运行的任务
+afetr_script： 同before_script  ，是在job运行之后执行的任务
+tags: 用于从允许运行该项目的所有的runner列表中选择特定的runner，在runner注册期间们可以指定runner的标签。上面例子就是让job1运行在标签是test的runner
+allow_failure: 运行失败、默认值是false。允许作业失败，。启用后，如果作业失败，改作业将在用户界面显示橙色警告。但是，管道的逻辑流程将认为作业成功，并且不会被阻塞。
+when:控制作业运行
+	on_success前面阶段中的所有作业都成功时才执行作业，默认值
+	on_failure 当前面阶段出现失败时执行
+	always 总是执行作业
+	manual 手动执行作业
+	delayed 延迟执行作业
+retry: 重试，配置在失败的情况下重试作业的次数。作业失败并配置了retry，将再次处理该作业，直到重试成功执行或者达到了指定的次数
+		retry可以和max及when组合使用，max指定最大尝试次数，when指符合什么条件时，有以下这些情况
+		always: 任何故障时重试
+        unknown_failure: 失败原因未知时
+        script_failure: 脚本失败时重试
+        api_failure: api失败时重试
+        stuck_or_timeout_failure: 作业卡住或者超时
+        runner_system_failure:运行系统发生故障
+        missing_dependency_failure: 依赖丢失
+        runner_unsupported: runner不受支持
+        stale_schedule: 无法执行延迟的作业
+        job_execution_timeout: 脚本超出了为作业设置的最大执行时间
+        archived_failure: 作业已存档且无法运行
+        unmet_prerequisites: 作业未能完成先决条件任务
+        scheduler_failure: 调度程序未能将作业分配给运行scheduler_failure
+        data_integrity_failure: 检测到结构完整性问题
+timeout: 
+parallel:配置要并行运行的作业实例数，此值必须大于等于2并且小于等于50；浙江创建n个并行运行的统一作业实例。他们以jon_name 1/N到job_name N/N依次命名
+only&except: 限制分支标签。only和except用分支策略来限制jobs构建
+		only定义哪些分支和标签的git项目将会被job执行，可以使用正则表达式
+		except定义哪些分支和标签的git项目将不会被job执行  可以用正则表达式
+rules: 构建规则。rules允许按照顺序评估单个规则，知道匹配并为作业动态提供属性， rules不能与pnly/except组合使用		
+		可用的规则
+		if  如果条件匹配：条件判断从上到下下，匹配即停止。多条件匹配可以使用&& ||。
+		changes  指定文件发生变化。如上面例子中job3中的rules
+		exists   指定文件存在  ，如同上面例子中job4的rules
+		allow_failure 在不停止管道本身的情况下运行作业失败或手动作业等待操作
+		上面例子中意思是如果DOMAIN  变量是example.com ，那么就手动执行，否则就直接执行下面when的规则
+workflow-rules: 顶级workflow关键字适用于整个管道，并将确定是否创建管道。when： 可以设置为always或者never，如果未提供 ，默认值是	always	
+cache-缓存：存储项目所需的运行时依赖项，指定项目工作空间中需要job之间缓存的文件或目录；全局cache定义在hob之外，针对所有job生效。job中cache优先于全局
+		cache:paths：由于缓存是在job见共享的，如果不同的job使用不同的路径就出现了缓存覆盖的问题，如何让不同的job缓存不同的cache呢，设置不同的cache:key.为缓存做个标记，可以配置job，分支为key来实现分支，作业特定的缓存。为不同的job定义不同的cache:key时，会为每个job分配一个独立的cache
+	cache:key 变量可以使用任何预定义变量，默认是default。gtilab9.0开始，默认情况下所有内容都在管道和作业之间共享。按照分支设置缓存如下：
+		cache:
+		  key: ${CI-MOMMIT_REF_SLUG}
