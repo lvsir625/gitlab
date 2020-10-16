@@ -1,50 +1,50 @@
-before_script:
+before_script:                            #整个管道之前做的操作
   - echo "before_script!!"
-variables:
+variables:                                #定义变量
   DOMAIN: example.com
-workflow:
+workflow:                                 #定义workflow，如果其中的规则成立，将执行整个pipline，否则执行when: never，即不执行整个pipline
   rules:
     - if: '$DOMAIN == "example.com"'
       when: always
     - when: never
-stages:
+stages:                                   #定义整个pipline中的阶段，即步骤。其中的步骤会按照上下顺序依次执行
   - build
   - test
   - codescan
   - deploy
 
-build:
-  before_script:
+build:                                 
+  before_script:                          #在这个job运行前执行的操作
     - echo "before_script in job"
-  stage: build
-  tags:
+  stage: build                            #stage是在job中定义这个job属于stages中的哪个步骤
+  tags:                                   #用于从允许运行该项目的所有的runner列表中选择特定的runner，在runner注册期间们可以指定runner的标签。这个例子中build就是gitlab-runner的标签
     - build
-  #only:
+  #only:                                  #限制分支标签。only和except用分支策略来限制jobs构建
   #  - master
-  script:
+  script:                                 #要执行的shell命令
     - echo "mvn clean"
     - echo "mvn install"
-  rules:
-    - exists:
+  rules:                                  #构建规则。rules允许按照顺序评估单个规则，直到匹配并为作业动态提供属性， rules不能与pnly/except组合使用
+    - exists:                             #接收一个数组，来判里面的文件是否存在
       - Dockerfile
-      when: delayed
-      start_in: "5"
-    - when: on_success
-  cache:
-    key: build
-    paths:
+      when: delayed                       #上面判断存在，就延迟执行
+      start_in: "5"                       #延迟5s执行
+    - when: on_success                    #前面阶段中的所有作业都成功时才执行作业，默认值
+  cache:                                  #缓存：存储项目所需的运行时依赖项，指定项目工作空间中需要job之间缓存的文件或目录；全局cache定义在hob之外，针对所有job生效。job中cache优先于全局
+    key: build                            #定义key变量，可以为不同的job分配独立的cache来缓存，避免不同job使用不同的路径出现缓存覆盖的问题
+    paths:                                #指定要缓存的文件路径
       - .gitlab-ci.yml
-  after_script:
+  after_script:                           #在这个job运行后执行的操作
     - echo "after_script in job"
 unittest:
   stage: test
   script: 
     - echo "run test.."
   rules:
-    - changes:
+    - changes:                            #判断给定的数组中的文件内容是否发生变化
       - Dockerfile
-      when: manual
-    - when: on_failure
+      when: manual                        #发生变化这个job就需要手动出发执行
+    - when: on_failure                    #前面阶段执行失败时执行
   cache:
     key: unittest
     paths:
@@ -53,11 +53,11 @@ deploy:
   stage: deploy
   tags:
     - deploy
-  only:
+  only:                                   #限定master分支可执行这个job
     - master
   script:
     - echo "hello deploy"
-  except: 
+  except:                                 #限定除了test分支都执行这个job
     - test
 codescan:
   stage: codescan
@@ -66,7 +66,7 @@ codescan:
     - sleep 3
   parallel: 2
   rules:
-    - if: '$DOMAIN == "example.com"'
+    - if: '$DOMAIN == "example.com"'      #判断if语句是否成立
       when: manual
     - if: '$DOMAIN == "example.cn"'
       when: delayed
